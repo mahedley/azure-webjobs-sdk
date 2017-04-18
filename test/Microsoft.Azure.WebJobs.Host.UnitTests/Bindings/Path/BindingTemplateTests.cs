@@ -90,11 +90,23 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
         }
 
         [Fact]
+        public void BuildCapturePattern_Doesnt_Allow_Expressions()
+        {
+            // binding expressions are not allowed in a capture pattern. 
+            // Captures just get top-level names. 
+            string pattern = @"{p1.p2}";
+            var tokens = BindingTemplateParser.GetTokens(pattern).ToList();
+
+            ExceptionAssert.ThrowsInvalidOperation(() => BindingTemplateSource.BuildCapturePattern(tokens),
+                "Capture expressions can't include dot operators");
+        }
+
+        [Fact]
         public void Bind_IfValidInput_ReturnsResolvedPath()
         {
             BindingTemplate template = BindingTemplate.FromString(@"{p1}-p2/{{2014}}/{d3}/folder/{name}.{ext}");
 
-            var parameters = new Dictionary<string, string> {{ "p1", "container" }, { "d3", "path/to" }, 
+            var parameters = new Dictionary<string, object> {{ "p1", "container" }, { "d3", "path/to" }, 
                 { "name", "file.1" }, { "ext", "txt" }};
 
             string resolvedText = template.Bind(parameters);
@@ -107,7 +119,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
         public void Bind_IfNonParameterizedPath_ReturnsResolvedPath()
         {
             BindingTemplate template = BindingTemplate.FromString("container");
-            var parameters = new Dictionary<string, string> { { "name", "value" } };
+            var parameters = new Dictionary<string, object> { { "name", "value" } };
 
             string result = template.Bind(parameters);
 
@@ -118,7 +130,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
         public void Bind_IfParameterizedPath_ReturnsResolvedPath()
         {
             BindingTemplate template = BindingTemplate.FromString(@"container/{name}");
-            var parameters = new Dictionary<string, string> { { "name", "value" } };
+            var parameters = new Dictionary<string, object> { { "name", "value" } };
 
             string result = template.Bind(parameters);
 
@@ -126,10 +138,74 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
         }
 
         [Fact]
+        public void Bind_DotExpression()
+        {
+            BindingTemplate template = BindingTemplate.FromString(@"container/{a.b.c}");
+            var parameters = new Dictionary<string, object> {
+                { "a", new {
+                    b = new {
+                        c = 123
+                    }
+                }}
+            };
+
+            string result = template.Bind(parameters);
+
+            Assert.Equal(@"container/123", result);
+        }
+
+        // Accessing a missing property throws. 
+        [Fact]
+        public void Bind_DotExpression_Illegal()
+        {
+            BindingTemplate template = BindingTemplate.FromString(@"container/{a.missing}");
+            var parameters = new Dictionary<string, object> {
+                { "a", new {
+                    b = new {
+                        c = 123
+                    }
+                } }
+            };
+
+            ExceptionAssert.ThrowsInvalidOperation(() => template.Bind(parameters),
+                "No readable property 'missing'");
+        }
+
+        [Fact]
+        public void Bind_DotExpression_IsLateBound()
+        {
+            // Use same binding expression with different binding data inputs and it resolves dynamically.
+            BindingTemplate template = BindingTemplate.FromString(@"container/{a.b.c}");
+            var parameters1 = new Dictionary<string, object> {
+                { "a", new {
+                    b = new {
+                        c = "first"
+                    }
+                }}
+            };
+
+            var parameters2 = new Dictionary<string, object> {
+                { "a", new {
+                    b = new {
+                        c = 123,
+                        d = 456
+                    },
+                    b2 = 789
+                }}
+            };
+                        
+            string result = template.Bind(parameters1);
+            Assert.Equal(@"container/first", result);
+
+            string result2 = template.Bind(parameters2);
+            Assert.Equal(@"container/123", result2);
+        }
+
+        [Fact]
         public void Bind_IfMissingParameter_Throws()
         {
             BindingTemplate template = BindingTemplate.FromString(@"container/{missing}");
-            var parameters = new Dictionary<string, string> { { "name", "value" } };
+            var parameters = new Dictionary<string, object> { { "name", "value" } };
 
             // Act and Assert
             ExceptionAssert.ThrowsInvalidOperation(
@@ -142,7 +218,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
         {
             BindingTemplate template = BindingTemplate.FromString(@"A/{B}/{c}");
 
-            var parameters = new Dictionary<string, string>
+            var parameters = new Dictionary<string, object>
             {
                 { "B", "TestB" },
                 { "c", "TestC" }
@@ -151,7 +227,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
             string result = template.Bind(parameters);
             Assert.Equal("A/TestB/TestC", result);
 
-            parameters = new Dictionary<string, string>
+            parameters = new Dictionary<string, object>
             {
                 { "b", "TestB" },
                 { "c", "TestC" }
@@ -167,7 +243,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
         {
             BindingTemplate template = BindingTemplate.FromString(@"A/{B}/{c}", ignoreCase: true);
 
-            var parameters = new Dictionary<string, string>
+            var parameters = new Dictionary<string, object>
             {
                 { "B", "TestB" },
                 { "c", "TestC" }
@@ -176,7 +252,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
             string result = template.Bind(parameters);
             Assert.Equal("A/TestB/TestC", result);
 
-            parameters = new Dictionary<string, string>
+            parameters = new Dictionary<string, object>
             {
                 { "b", "TestB" },
                 { "C", "TestC" }

@@ -59,8 +59,7 @@ namespace Microsoft.Azure.WebJobs.Host.Bindings
                 return bindingTemplate.Pattern;
             }
 
-            IReadOnlyDictionary<string, string> parameters = BindingDataPathHelper.ConvertParameters(bindingData);
-            string path = bindingTemplate.Bind(parameters);
+            string path = bindingTemplate.Bind(bindingData);
 
             return path;
         }

@@ -13,36 +13,6 @@ namespace Microsoft.Azure.WebJobs.Host.Bindings
     internal static class BindingDataPathHelper
     {
         /// <summary>
-        /// Converts all parameter values in the specified binding data to their path compatible string values.
-        /// </summary>
-        /// <param name="bindingData">The binding data to convert.</param>
-        /// <returns>A collection of path compatible parameters.</returns>
-        public static Dictionary<string, string> ConvertParameters(IReadOnlyDictionary<string, object> bindingData)
-        {
-            if (bindingData == null)
-            {
-                throw new ArgumentNullException("bindingData");
-            }
-
-            Dictionary<string, string> parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            if (bindingData != null)
-            {
-                foreach (KeyValuePair<string, object> item in bindingData)
-                {
-                    string stringParamValue = ConvertParameterValueToString(item.Value);
-
-                    if (stringParamValue != null)
-                    {
-                        parameters.Add(item.Key, stringParamValue);
-                    }
-                }
-            }
-
-            return parameters;
-        }
-
-        /// <summary>
         /// Convert a parameter value of supported type into path compatible string value.
         /// The set of supported types is limited to built-in signed/unsigned integer types, 
         /// strings, and Guid (which is translated in canonical form without curly braces).

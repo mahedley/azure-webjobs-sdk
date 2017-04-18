@@ -135,21 +135,7 @@ namespace Microsoft.Azure.WebJobs.Host.Bindings.Path
         /// structure and parameter names provided by the list of tokens.</returns>
         internal static string BuildCapturePattern(IEnumerable<BindingTemplateToken> tokens)
         {
-            StringBuilder builder = new StringBuilder("^");
-
-            foreach (BindingTemplateToken token in tokens)
-            {
-                if (token.IsParameter)
-                {
-                    builder.Append(String.Format(CultureInfo.InvariantCulture, "(?<{0}>.*)", token.Value));
-                }
-                else
-                {
-                    builder.Append(Regex.Escape(token.Value));
-                }
-            }
-
-            return builder.Append("$").ToString();
+            return BindingTemplateToken.BuildCapturePattern(tokens);         
         }
     }
 }
