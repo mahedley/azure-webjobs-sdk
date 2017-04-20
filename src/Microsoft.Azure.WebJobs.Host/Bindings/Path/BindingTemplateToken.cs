@@ -3,9 +3,15 @@
 
 using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Globalization;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.CSharp.RuntimeBinder;
+using Newtonsoft.Json.Linq;
 
 namespace Microsoft.Azure.WebJobs.Host.Bindings.Path
 {
@@ -178,29 +184,63 @@ namespace Microsoft.Azure.WebJobs.Host.Bindings.Path
                     {
                         var propName = _parts[i];
 
-                        var type = current.GetType();
-
-                        var prop = type.GetProperty(propName);
-                        if (prop == null || !prop.CanRead)
+                        try
                         {
-                            throw new InvalidOperationException($"No readable property '{propName}'");
+                            current = GetProperty(current, propName);
                         }
-                        current = prop.GetValue(current);
+                        catch (Exception e)
+                        {
+                            throw new InvalidOperationException($"Error while accessing '{propName}': {e.Message}");
+                        }
                     }
                 }
                 else
                 {
                     // Not found. Maybe a resolver can do it?
                     current = this.Fallback();
-                }
 
-                if (current == null)
-                {
-                    throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, "No value for named parameter '{0}'.", this.ParameterName));
+                    if (current == null)
+                    {
+                        throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, "No value for named parameter '{0}'.", this.ParameterName));
+                    }
                 }
 
                 var strValue = BindingDataPathHelper.ConvertParameterValueToString(current);
                 return strValue;
+            }
+
+            // Case insensitive lookup.
+            // Helper to get a property from an object.             
+            // This supports both static types and JObject (for dynamic) 
+            public static object GetProperty(object o, string member)
+            {
+                Type scope = o.GetType();
+                JObject jobj = o as JObject;
+                if (jobj != null)
+                {
+                    JToken propValue;
+                    // JObject's normal dot operator returns null for missing properties; 
+                    // we need to explicitly call TryGetValue.
+                    if (!jobj.TryGetValue(member, StringComparison.OrdinalIgnoreCase, out propValue))
+                    {
+                        throw new InvalidOperationException($"property doesn't exist.");
+                    }
+                    return propValue;
+                }
+                else
+                {
+                    var prop = scope.GetProperty(member, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                    if (prop == null)
+                    {
+                        throw new InvalidOperationException($"property doesn't exist.");
+                    }
+                    if (!prop.CanRead)
+                    {
+                        throw new InvalidOperationException($"property is not readable.");
+                    }
+
+                    return prop.GetValue(o, null);
+                }
             }
         }
 

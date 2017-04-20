@@ -8,6 +8,7 @@ using Microsoft.Azure.WebJobs.Host.Bindings.Path;
 using Microsoft.Azure.WebJobs.Host.TestCommon;
 using Xunit;
 using Xunit.Extensions;
+using Newtonsoft.Json.Linq;
 
 namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
 {
@@ -154,6 +155,39 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
             Assert.Equal(@"container/123", result);
         }
 
+        [Theory]
+        [InlineData("container/{a.x-header}", "container/header", null)] // with dashes, like request
+        [InlineData("container/{a.prop}", "container/bar", null)]
+        [InlineData("container/{a.pRop}", "container/bar", null)] // casing 
+        [InlineData("container/{a.missing}", null, "Error while accessing 'missing': property doesn't exist.")]
+        [InlineData("a{null}b", "ab", null)]
+        [InlineData("a{a.null}b", "ab", null)]
+        public void Bind_DotExpression_With_JObject(string templateSource, string value, string error)
+        {
+            JObject jobj = new JObject();
+            jobj["prop"] = "bar";
+            jobj["x-header"] = "header";
+            jobj["null"] = null;
+
+            var parameters = new Dictionary<string, object> {
+                { "a", jobj },
+                { "null", null }
+            };
+
+            BindingTemplate template = BindingTemplate.FromString(templateSource);
+            
+            if (error != null)
+            {
+                ExceptionAssert.ThrowsInvalidOperation(() => template.Bind(parameters),
+                error);
+            }
+            else
+            {
+                string result = template.Bind(parameters);
+                Assert.Equal(value, result);
+            }
+        }
+
         // Accessing a missing property throws. 
         [Fact]
         public void Bind_DotExpression_Illegal()
@@ -168,7 +202,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Bindings.Path
             };
 
             ExceptionAssert.ThrowsInvalidOperation(() => template.Bind(parameters),
-                "No readable property 'missing'");
+                "Error while accessing 'missing': property doesn't exist.");
         }
 
         [Fact]

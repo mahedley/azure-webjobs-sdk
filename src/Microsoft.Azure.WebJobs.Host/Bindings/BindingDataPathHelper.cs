@@ -50,6 +50,10 @@ namespace Microsoft.Azure.WebJobs.Host.Bindings
                         {
                             return parameterValue.ToString();
                         }
+                        if (parameterValue is Newtonsoft.Json.Linq.JToken)
+                        {
+                            return parameterValue.ToString();
+                        }
                         return null;
                 }
             }
